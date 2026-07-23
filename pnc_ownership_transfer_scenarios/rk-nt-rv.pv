@@ -1,0 +1,43 @@
+(*
+ * Copyright (C) 2026 Gabriele Bellini, Roberto Metere
+ * SPDX-License-Identifier: Apache-2.0
+ * 
+ * Gabriele Bellini, University of Milan, Italy
+ * Roberto Metere, University of York, UK
+ *
+ * Scenario N2:
+ *   - No TMP
+ *   - Rekeying
+ *   - Revocation
+ *
+ * Depends:pnc_ownership_transfer_buyer.pvl
+ *)
+
+let OEM =
+  (* phase 0: first ownership *)
+  new sk_EV:bitstring;
+  let pk_EV = pk(sk_EV) in
+  out(pub, sign((PCID, pk_EV), sk_OEM));
+  event ProvInstalled(PCID, pk_EV);
+  
+  (* No TPM := the key sk_EV gets leaked out *)
+  out(pub, sk_EV);
+  
+  (* phase 1: what provisioning key does the eMSP accept after sale? *)
+  (
+    phase 1;
+    new sk'_EV:bitstring;
+    let pk'_EV = pk(sk'_EV) in
+    out(pub, sign((PCID, pk'_EV), sk_OEM));   (* new provisioning cert *)
+    event ReKeyed(pk'_EV);
+    ! out(c_currentkey, pk'_EV)
+  ).
+
+
+process
+    ( out(pub, pk(sk_OEM)) )
+  | ( out(pub, pk(sk_eMSP)) )
+  | OEM
+  | eMSP
+  | EV
+  | ! (new high_entropy_challenge:bitstring; installVerifier(high_entropy_challenge))

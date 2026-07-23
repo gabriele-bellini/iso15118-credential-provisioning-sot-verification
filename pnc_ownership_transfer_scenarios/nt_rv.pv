@@ -1,0 +1,21 @@
+(*
+ * Copyright (C) 2026 Gabriele Bellini, Roberto Metere
+ * SPDX-License-Identifier: Apache-2.0
+ * 
+ * Gabriele Bellini, University of Milan, Italy
+ * Roberto Metere, University of York, UK
+ *
+ * Scenario NR:
+ *   - No TMP
+ *   - Revocation
+ *
+ * Depends:pnc_ownership_transfer_seller.pvl
+ *)
+
+process
+    EV_SellerOwned
+  | eMSP_PreSale
+  | eMSP_AfterSale
+  | EV_BuyerOwned
+(*   | KeepValid_SellerContract (* Comment to revoke *) *)
+  | LeakKey (* Comment if TPM *)

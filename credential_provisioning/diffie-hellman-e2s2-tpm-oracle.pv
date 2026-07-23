@@ -1,0 +1,212 @@
+(*
+ * Copyright (C) 2026 Gabriele Bellini, Roberto Metere
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Gabriele Bellini, University of Milan, Italy
+ * Roberto Metere, University of York, UK
+ *
+ * Scenario (e2,s2)-tpm-oracle:
+ *
+ * We analyze the $\text{C}(2e, 2s, \text{ECC/FFC CDH})$ key
+ * agreement scheme from NIST SP 800-56A, augmented with
+ * explicit digital signatures in the style of classic authenticated
+ * Diffie-Hellman.
+ * We demonstrate that, like the original protocols in the standard,
+ * this variant remains vulnerable to impersonation attacks
+ * under a signing-oracle threat model.
+ *
+ *   A -> B : { g*esk1 }skA, pkA    (esk1 fresh)
+ *   B -> A : { g*esk2 }skB, pkB    (esk2 fresh)
+ *   k = kdf((g*esk1)*esk2 || (g*skA)*skB) = kdf((g*esk2)*esk1 || (g*skB)*skA))
+ *   A -> B : { communication }k
+ *
+ * NOTE: with deterministic enc and no decryption oracle on an honest key,
+ * strong secrecy coincides with reachability secrecy here. The added value is
+ * certifying no partial leak, not merely non-extraction. Equivalence mode
+ * over 5 phases + the DH equation can need `set` tuning and may report false
+ * attacks.
+ *)
+
+set attacker = active.
+
+free c: channel.
+
+type group.
+type scalar.
+type key.
+
+(* Key derivation function *)
+fun kdf(group, group): key.
+
+(* Shared key encryption *)
+fun enc(bitstring, key): bitstring.
+reduc forall x: bitstring, y: key; dec(enc(x,y),y) = x.
+
+(* Diffie-Hellman *)
+const g: group.
+fun dh_oper(group, scalar): group.
+equation forall x: scalar, y: scalar; dh_oper(dh_oper(g, x), y) = dh_oper(dh_oper(g, y), x).
+
+(* Signatures *)
+fun sign(group, scalar): bitstring.
+reduc forall m: group, k: scalar; getmess(sign(m,k)) = m.
+reduc forall m: group, k: scalar; checksign(sign(m,k), dh_oper(g, k)) = m.
+
+
+free future_communications_fromCompromisedSkOwner: bitstring [private].
+free future_communications_toCompromisedSkOwner: bitstring [private].
+free communications_betweenCompromisedParties: bitstring [private].
+free communications_betweenUncompromisedParties: bitstring [private].
+free communications_afterFullKeyRenewal: bitstring [private].
+free attacker_message: bitstring.
+
+
+(* Test protocol termination *)
+event messageReceived(bitstring).
+(* These 5 event can be use to validate the model correct implementation *)
+(* query event(messageReceived(communications_betweenUncompromisedParties)). *)
+(* query event(messageReceived(future_communications_fromCompromisedSkOwner)). *)
+(* query event(messageReceived(communications_betweenCompromisedParties)). *)
+(* query event(messageReceived(future_communications_toCompromisedSkOwner)). *)
+(* query event(messageReceived(communications_afterFullKeyRenewal)). *)
+
+(* This, when proved reachable, demonstrate an impersonation attack *)
+query event(messageReceived(attacker_message)).
+
+(* Test whether communications are secret *)
+query attacker(communications_betweenUncompromisedParties).
+query attacker(future_communications_fromCompromisedSkOwner).
+query attacker(future_communications_toCompromisedSkOwner).
+query attacker(communications_betweenCompromisedParties).
+query attacker(communications_afterFullKeyRenewal).
+
+
+(* we keep generic naming as the protocol is generic *)
+let p0(skA: scalar, pkA: group, pkB: group) =
+    in(c, =pkB);
+    new esk0: scalar;
+    out(c,(sign(dh_oper(g, esk0), skA), pkA));
+    in(c,m1: bitstring);
+    let x1 = checksign(m1, pkB) in
+    let z1 = dh_oper(x1, esk0) in
+    let z2 = dh_oper(pkB, skA) in
+    let k = kdf(z1, z2) in
+    in (c,m: bitstring);
+    let msg = dec(m,k) in
+    event messageReceived(msg);
+    0.
+
+
+let p1(skB: scalar, pkB: group, pkA: group, message: bitstring) =
+    in(c, (m0: bitstring, =pkA));
+    let x0 = checksign(m0, pkA) in
+    new esk1: scalar;
+    let z1 = dh_oper(x0, esk1) in
+    let z2 = dh_oper(pkA, skB) in
+    let k = kdf(z1, z2) in
+    out(c,sign(dh_oper(g, esk1), skB));
+    out(c, enc(message,k)).
+
+let tpm_oracle__sig(sk: scalar) = in(c, x: group); out(c, sign(x, sk)).
+let tpm_oracle__dh_oper(sk: scalar) = in(c, x: group); out(c, dh_oper(x, sk)).
+
+process
+  new skA: scalar;
+  let pkA = dh_oper(g, skA) in
+  out(c, pkA);
+  new skB: scalar;
+  let pkB = dh_oper(g, skB) in
+  out(c, pkB);
+  out(c, attacker_message);
+  (
+    (*
+     * Phase 0: before key leakage, sessions encrypt the payload.
+     * These messages must remain indistinguishable after the later
+     * leakage / oracle-abuse of the keys (forward secrecy).
+     *)
+    ( (!p0(skA, pkA, pkB)) | (!p1(skB, pkB, pkA, communications_betweenUncompromisedParties)) )
+    |
+    (*
+     * Phase 1/2: skA is oracle-abused.
+     * The sender's private signing key is used by the attacker as
+     * an oracle over an attacker-chosen ephemeral (skA itself is never
+     * revealed), but the sender is still able to communicate
+     * with an uncompromised party.
+     *)
+    phase 1;
+    ( !tpm_oracle__dh_oper(skA) | !tpm_oracle__sig(skA) ) |
+    phase 2; (* Here the oracle is no longer available. Cannot be used interactively during the attack but only before it. *)
+    ( (!p0(skA, pkA, pkB)) | (!p1(skB, pkB, pkA, future_communications_fromCompromisedSkOwner)) )
+    |
+    (*
+     * Phase 3/4: also skB is oracle-abused.
+     * Both signing keys have been used as oracles.
+     *)
+    phase 3;
+    ( !tpm_oracle__dh_oper(skB) | !tpm_oracle__sig(skB) ) |
+    phase 4; (* Here the oracle is no longer available. Cannot be used interactively during the attack but only before it. *)
+    ( (!p0(skA, pkA, pkB)) | (!p1(skB, pkB, pkA, communications_betweenCompromisedParties)) )
+    |
+    (*
+     * Phase 5: only skB remains oracle-abused;
+     * skA has already been renewed to a fresh key.
+     *)
+    phase 5;
+    new nwskA: scalar;
+    let nwpkA = dh_oper(g, nwskA) in
+    out(c, nwpkA);
+    ( (!p0(nwskA, nwpkA, pkB)) | (!p1(skB, pkB, nwpkA, future_communications_toCompromisedSkOwner)) )
+    |
+    (*
+     * Phase 6: FULL HEAL.
+     * Both skA and skB are renewed to fresh, never-oracled keys.
+     *
+     * Backward secrecy / post-compromise security: once every compromised
+     * signing key has been renewed, do future sessions regain full, strong
+     * secrecy? The attacker still retains everything it learned in
+     * Phases 1-3 (the oracled signatures over g^esk0 and g^esk1 and dh_oper under
+     * the old keys), but those cannot help it impersonate, nor
+     * distinguish traffic between, the holders of the fresh keys.
+     *)
+    phase 6;
+    new healskA: scalar;
+    let healpkA = dh_oper(g, healskA) in
+    out(c, healpkA);
+    new healskB: scalar;
+    let healpkB = dh_oper(g, healskB) in
+    out(c, healpkB);
+    ( (!p0(healskA, healpkA, healpkB)) | (!p1(healskB, healpkB, healpkA, communications_afterFullKeyRenewal)) )
+  )
+
+
+(*
+--------------------------------------------------------------
+Verification summary:
+
+(* Test protocol termination and correct implementation (The protocol is correctly modeled) *)
+Query not event(messageReceived(communications_betweenUncompromisedParties[])) is false.
+Query not event(messageReceived(future_communications_fromCompromisedSkOwner[])) is false.
+Query not event(messageReceived(communications_betweenCompromisedParties[])) is false.
+Query not event(messageReceived(future_communications_toCompromisedSkOwner[])) is false.
+Query not event(messageReceived(communications_afterFullKeyRenewal[])) is false.
+
+(* Query about impersonation (the attacker is able to impersonate the legitimate sender) *)
+Query not event(messageReceived(attacker_message[])) is false.
+
+(* Query about confidentiality *)
+(* There is strong forward secrecy *)
+Query not attacker_p6(communications_betweenUncompromisedParties[]) is true.
+Query not attacker_p6(future_communications_fromCompromisedSkOwner[]) is true.
+Query not attacker_p6(future_communications_toCompromisedSkOwner[]) is true.
+Query not attacker_p6(communications_betweenCompromisedParties[]) is false.
+Query not attacker_p6(communications_afterFullKeyRenewal[]) is true.
+
+--------------------------------------------------------------
+
+User time (seconds): 476.12
+System time (seconds): 0.11
+Percent of CPU this job got: 99%
+Elapsed (wall clock) time (h:mm:ss or m:ss): 7:56.34
+Maximum resident set size (kbytes): 88092
+
+*)

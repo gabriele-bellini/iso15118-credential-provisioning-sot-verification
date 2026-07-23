@@ -1,0 +1,374 @@
+(*
+ * Copyright (C) 2026 Gabriele Bellini, Roberto Metere
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ *  Gabriele Bellini, University of Milan, Italy
+ *  Roberto Metere, University of York, UK
+ *
+ * Scenario Rekeying:
+ *)
+
+(* Loops if types are ignored *)
+set ignoreTypes = false.
+
+free proximity_c, internet_c: channel.
+
+(* Passive adversary *)
+(* set attacker = passive. *)
+
+type host.
+type nonce.
+type spkey.
+type sskey.
+type id.
+type action.
+
+
+(* Signatures *)
+
+fun spk(sskey): spkey.
+fun sign(bitstring, sskey): bitstring.
+reduc forall m: bitstring, k: sskey; getmess(sign(m,k)) = m.
+reduc forall m: bitstring, k: sskey; checksign(sign(m,k), spk(k)) = m.
+
+
+(* Secrecy assumptions *)
+query secret sk_S.
+query secret ssk_EV_intended.
+query secret sk_B.
+query secret sk_OEM.
+
+(* notice: adding other actors mey require changing processes code (e.g. processRegisterAttackerHost) *)
+free S, B, OEM, otherS, otherB, otherOEM, intendedEV, scamEV, otherEV: host.
+free sell, buy, sold, bought, rekey: action.
+free intendedPCID, scamPCID, otherPCID: id. (* S own intendedPCID, scamPCID but not otherPCID*)
+
+(* We assume that each OEM have all these info (even info about other seller, buyer, pcid):
+    - carRegister is used to save valid and accepted EV certificates
+    - knownHost is used to speak and autenticate registered clients
+    - ownerships is used to keep track of veicle ownership and allow buy/sell operation
+
+   When an EV is sold car key, pcid, and owner are updated in carRegister and ownerships.
+  
+   otherOEM represent a dishonest OEM that *follow the protocol* but didn't setup the car TPM in the first place.
+   We will check if it is able to orchestrate a correct complete sell of a PCID that it didn't set up convincing both S, B and EV.
+   We assume that otherOEM have all the info that the real OEM has. We will use this set up to prove that an evil OEM is not able to setup EV.
+*)
+table tbl_knownHost(host, spkey).
+table tbl_ownerships(host, id). (* here there is also past owner record *)
+table tbl_sold(host, id). (* here there is only past owner record *)
+table tbl_carRegister(id,spkey).
+
+(* Queries *)
+
+(* free future_comunications: scalar [private]. (* this can have any type *)
+query attacker(future_comunications). *)
+
+event beginEV(id,host,spkey,spkey,nonce). (* EV starts with its contract and a new pk*)
+event endEV(id,host,spkey,id,spkey,nonce). (* EV ends with its old contract, its new contract (id+sk) signed, a nonce*)
+event beginOEM(host,host,host,id,nonce,nonce,nonce,nonce,nonce).
+event endOEM(host,host,host,id,id,spkey,nonce,nonce,nonce,nonce,nonce).
+event beginS(action,host,host,id,nonce,nonce).
+event endS(action,host,host,id,nonce,nonce).
+event beginB(action,host,host,id,nonce,nonce).
+event endB(action,host,host,id,id,nonce,nonce).
+
+(* THE FOLLOWING PROPERTY MUST BE FALSE *)
+(* Each event can happen (this test if the model is working properly) *)
+(* 1. EV Events *)
+(* query pk_EV: spkey, nwpk_EV: spkey, ID_OEM: host, PCID: id, nwPCID: id, N_EV: nonce;
+    event(beginEV(PCID,ID_OEM,pk_EV,nwpk_EV,N_EV));
+    event(endEV(PCID,ID_OEM,pk_EV,nwPCID,nwpk_EV,N_EV)).
+(* 2. OEM Events *)
+query ID_OEM: host, ID_B: host, ID_S: host, PCID: id, nwPCID: id, N_S: nonce, nwpk_EV: spkey, N_B: nonce, N_EV: nonce, N_OEM_S: nonce, N_OEM_B: nonce; 
+    event(beginOEM(ID_OEM,ID_S,ID_B,PCID,N_S,N_B,N_EV,N_OEM_S,N_OEM_B));
+    event(endOEM(ID_OEM,ID_S,ID_B,PCID,nwPCID,nwpk_EV,N_S,N_B,N_EV,N_OEM_S,N_OEM_B)).
+(* 3. Seller (S) Events *)
+query ID_B: host, ID_S: host, PCID: id, N_S:nonce, N_OEM_S:nonce;
+    event(beginS(sell,ID_S,ID_B,PCID,N_S,N_OEM_S));
+    event(endS(sold,ID_S,ID_B,PCID,N_S,N_OEM_S)).
+(* 4. Buyer (B) Events *)
+query ID_B: host, ID_S: host, PCID: id, nwPCID: id, N_B:nonce, N_OEM_B:nonce;
+    event(beginB(buy,ID_B,ID_S,PCID,N_B,N_OEM_B));
+    event(endB(bought,ID_B,ID_S,PCID,nwPCID,N_B,N_OEM_B)).  *)
+
+
+(* THE FOLLOWING PROPERTY MUST BE TRUE *)
+(* Each actor can start and terminate (this test if the model is working properly) *)
+query ID_B: host, ID_S: host, PCID: id, nwPCID: id, N_B:nonce, N_OEM_B:nonce;
+    inj-event(endB(bought,ID_B,ID_S,PCID,nwPCID,N_B,N_OEM_B)) ==> inj-event(beginB(buy,ID_B,ID_S,PCID,N_B,N_OEM_B)).
+query ID_B: host, ID_S: host, PCID: id, N_S:nonce, N_OEM_S:nonce;
+    inj-event(endS(sold,ID_S,ID_B,PCID,N_S,N_OEM_S)) ==> inj-event(beginS(sell,ID_S,ID_B,PCID,N_S,N_OEM_S)).
+query ID_OEM: host, ID_B: host, ID_S: host, PCID: id, nwPCID: id, N_S: nonce, nwpk_EV: spkey, N_B: nonce, N_EV: nonce, N_OEM_S: nonce, N_OEM_B: nonce;
+    inj-event(endOEM(ID_OEM,ID_S,ID_B,PCID,nwPCID,nwpk_EV,N_S,N_B,N_EV,N_OEM_S,N_OEM_B)) ==> inj-event(beginOEM(ID_OEM,ID_S,ID_B,PCID,N_S,N_B,N_EV,N_OEM_S,N_OEM_B)).
+query pk_EV: spkey, nwpk_EV: spkey, ID_OEM: host, PCID: id, nwPCID: id, N_EV: nonce;
+    inj-event(endEV(PCID,ID_OEM,pk_EV,nwPCID,nwpk_EV,N_EV)) ==> inj-event(beginEV(PCID,ID_OEM,pk_EV,nwpk_EV,N_EV)).
+(* termination always happen in the right order :
+    - OEM end before S, B
+    - EV end before OEM
+*)
+query ID_OEM: host, ID_B: host, ID_S: host, PCID: id, nwPCID: id, nwpk_EV: spkey, N_S: nonce, N_B: nonce, N_EV: nonce, N_OEM_S: nonce, N_OEM_B: nonce;
+    inj-event(endB(bought,ID_B,ID_S,PCID,nwPCID,N_B,N_OEM_B)) ==> inj-event(endOEM(ID_OEM,ID_S,ID_B,PCID,nwPCID,nwpk_EV,N_S,N_B,N_EV,N_OEM_S,N_OEM_B)).
+query ID_OEM:host, ID_B: host, ID_S: host, PCID: id, nwPCID: id, N_S: nonce, nwpk_EV: spkey, N_B: nonce, N_EV: nonce, N_OEM_S: nonce, N_OEM_B: nonce;
+    inj-event(endS(sold,ID_S,ID_B,PCID,N_S,N_OEM_S)) ==> inj-event(endOEM(ID_OEM,ID_S,ID_B,PCID,nwPCID,nwpk_EV,N_S,N_B,N_EV,N_OEM_S,N_OEM_B)).
+query pk_EV: spkey, nwpk_EV: spkey, ID_OEM: host, ID_B: host, ID_S: host, PCID: id, nwPCID: id, N_S: nonce, N_B: nonce, N_EV: nonce, N_OEM_S: nonce, N_OEM_B: nonce;
+    inj-event(endOEM(ID_OEM,ID_S,ID_B,PCID,nwPCID,nwpk_EV,N_S,N_B,N_EV,N_OEM_S,N_OEM_B)) ==> inj-event(endEV(PCID,ID_OEM,pk_EV,nwPCID,nwpk_EV,N_EV)).
+(* termination always happen in the right order :
+    - EV terminates before S, B
+*)
+query pk_EV: spkey, nwpk_EV: spkey, ID_OEM: host, ID_B: host, ID_S: host, PCID: id, nwPCID: id, N_B: nonce, N_EV: nonce, N_OEM_B: nonce;
+    inj-event(endB(bought,ID_B,ID_S,PCID,nwPCID,N_B,N_OEM_B)) ==> inj-event(endEV(PCID,ID_OEM,pk_EV,nwPCID,nwpk_EV,N_EV)).
+query pk_EV: spkey, nwpk_EV: spkey, ID_OEM: host, ID_B: host, ID_S: host, PCID: id, nwPCID: id, N_S: nonce, N_EV: nonce, N_OEM_S: nonce;
+    inj-event(endS(sold,ID_S,ID_B,PCID,N_S,N_OEM_S)) ==> inj-event(endEV(PCID,ID_OEM,pk_EV,nwPCID,nwpk_EV,N_EV)).
+
+(* AUTHENTICATION PROPERTIES *)
+query ID_OEM: host, ID_B: host, ID_S: host, PCID: id, pk_EV: spkey, nwPCID: id, nwpk_EV: spkey, N_S: nonce, N_B: nonce, N_EV: nonce, N_OEM_S: nonce, N_OEM_B:nonce;
+    inj-event(endS(sold,ID_S,ID_B,PCID,N_S,N_OEM_S)) ==> inj-event(beginOEM(ID_OEM,ID_S,ID_B,PCID,N_S,N_B,N_EV,N_OEM_S,N_OEM_B));
+    inj-event(endB(bought,ID_B,ID_S,PCID,nwPCID,N_B,N_OEM_B)) ==> inj-event(beginOEM(ID_OEM,ID_S,ID_B,PCID,N_S,N_B,N_EV,N_OEM_S,N_OEM_B));
+    inj-event(endOEM(ID_OEM,ID_S,ID_B,PCID,nwPCID,nwpk_EV,N_S,N_B,N_EV,N_OEM_S,N_OEM_B)) ==> inj-event(beginB(buy,ID_B,ID_S,PCID,N_B,N_OEM_B));
+    inj-event(endOEM(ID_OEM,ID_S,ID_B,PCID,nwPCID,nwpk_EV,N_S,N_B,N_EV,N_OEM_S,N_OEM_B)) ==> inj-event(beginS(sell,ID_S,ID_B,PCID,N_S,N_OEM_S));
+    inj-event(endEV(PCID,ID_OEM,pk_EV,nwPCID,nwpk_EV,N_EV)) ==> inj-event(beginOEM(ID_OEM,ID_S,ID_B,PCID,N_S,N_B,N_EV,N_OEM_S,N_OEM_B));
+    inj-event(endOEM(ID_OEM,ID_S,ID_B,PCID,nwPCID,nwpk_EV,N_S,N_B,N_EV,N_OEM_S,N_OEM_B)) ==> inj-event(beginEV(PCID,ID_OEM,pk_EV,nwpk_EV,N_EV)).
+    
+(* INDIRECT AUTHENTICATION *)
+query ID_B: host, ID_S: host, ID_OEM:host, PCID: id, pk_EV: spkey, nwPCID: id, nwpk_EV: spkey, N_S:nonce, N_B:nonce, N_EV: nonce, N_OEM_S: nonce, N_OEM_B:nonce;
+    inj-event(endOEM(ID_OEM,ID_S,ID_B,PCID,nwPCID,nwpk_EV,N_S,N_B,N_EV,N_OEM_S,N_OEM_B)) ==> (inj-event(endEV(PCID,ID_OEM,pk_EV,nwPCID,nwpk_EV,N_EV)) ==> inj-event(beginB(buy,ID_B,ID_S,PCID,N_B,N_OEM_B)));
+    inj-event(endOEM(ID_OEM,ID_S,ID_B,PCID,nwPCID,nwpk_EV,N_S,N_B,N_EV,N_OEM_S,N_OEM_B)) ==> (inj-event(endEV(PCID,ID_OEM,pk_EV,nwPCID,nwpk_EV,N_EV)) ==> inj-event(beginS(sell,ID_S,ID_B,PCID,N_S,N_OEM_S)));
+    inj-event(endS(sold,ID_S,ID_B,PCID,N_S,N_OEM_S)) ==> (inj-event(beginOEM(ID_OEM,ID_S,ID_B,PCID,N_S,N_B,N_EV,N_OEM_S,N_OEM_B)) ==>  inj-event(beginB(buy,ID_B,ID_S,PCID,N_B,N_OEM_B)));
+    inj-event(endB(bought,ID_B,ID_S,PCID,nwPCID,N_B,N_OEM_B)) ==> (inj-event(beginOEM(ID_OEM,ID_S,ID_B,PCID,N_S,N_B,N_EV,N_OEM_S,N_OEM_B)) ==> inj-event(beginS(sell,ID_S,ID_B,PCID,N_S,N_OEM_S)));
+    inj-event(endS(sold,ID_S,ID_B,PCID,N_S,N_OEM_S)) ==> (inj-event(beginOEM(ID_OEM,ID_S,ID_B,PCID,N_S,N_B,N_EV,N_OEM_S,N_OEM_B)) ==> inj-event(beginEV(PCID,ID_OEM,pk_EV,nwpk_EV,N_EV)));
+    inj-event(endB(bought,ID_B,ID_S,PCID,nwPCID,N_B,N_OEM_B)) ==> (inj-event(beginOEM(ID_OEM,ID_S,ID_B,PCID,N_S,N_B,N_EV,N_OEM_S,N_OEM_B)) ==> inj-event(beginEV(PCID,ID_OEM,pk_EV,nwpk_EV,N_EV))).
+    
+
+(* SPECIFIC USE CASES *)
+(* THE FOLLOWING PROPERTY MUST BE NOT REACHABLE *)
+(* in particular Seller S is not able to sell to Buyer B an owned but unwanted eletric veicle (scamPCID) *)
+query nwPCID: id, nwpk_EV: spkey, N_S: nonce, N_OEM_S: nonce;
+    event(endS(sold,S,B,scamPCID,N_S,N_OEM_S)).
+query nwPCID: id, nwpk_EV: spkey, N_B: nonce, N_OEM_B: nonce;
+    event(endB(bought,B,S,scamPCID,nwPCID,N_B,N_OEM_B)).
+(* in particular Seller S is not able to sell to Buyer B something B wants but that S doesn't own *)
+query nwPCID: id, nwpk_EV: spkey, N_S: nonce, N_OEM_S: nonce;
+    event(endS(sold,S,B,otherPCID,N_S,N_OEM_S)).
+query nwPCID: id, nwpk_EV: spkey, N_S: nonce, N_B: nonce, N_OEM_B:nonce;
+    event(endB(bought,B,S,otherPCID,nwPCID,N_B,N_OEM_B)).
+
+(* properties related to other (unwanted) seller/buyer entering the protocol *)
+(* otherS is not able to sell a desired EV to B (because B expect to buy it from someone else (S)) *)
+query N_S: nonce, N_OEM_S: nonce;
+    event(endS(sold,otherS,B,otherPCID,N_S,N_OEM_S)).
+(* otherB is not able to buy a desired EV from S (because we modelled the scenario where S expect to sell it to B) *)
+query nwPCID: id, N_B: nonce, N_OEM_B: nonce;
+    event(endB(bought,otherB,S,intendedPCID,nwPCID,N_B,N_OEM_B)).
+
+(* an OEM (that knows all the public information) shouldn't be able to sell a vehicle it didn't certify/create *)
+(* so, in the given scenario, it should never be able to sell anything *)
+query ID_B: host, ID_S: host, PCID: id, nwPCID: id, N_S: nonce, nwpk_EV: spkey, N_B: nonce, N_EV: nonce, N_OEM_S: nonce, N_OEM_B: nonce; 
+    event(beginOEM(otherOEM,ID_S,ID_B,PCID,N_S,N_B,N_EV,N_OEM_S,N_OEM_B));
+    event(endOEM(otherOEM,ID_S,ID_B,PCID,nwPCID,nwpk_EV,N_S,N_B,N_EV,N_OEM_S,N_OEM_B)).
+    
+(* THE FOLLOWING PROPERTIES MUST BE REACHABLE *)
+(* Seller S and Buyer B are able to trade the intended PCID and update the EV credentials *)
+query nwPCID: id, pk_EV: spkey, nwpk_EV: spkey, N_S: nonce, N_B: nonce, N_EV: nonce, N_OEM_S: nonce, N_OEM_B: nonce;
+    event(endB(bought,B,S,intendedPCID,nwPCID,N_B,N_OEM_B));
+    event(endS(sold,S,B,intendedPCID,N_S,N_OEM_S));
+    event(endOEM(OEM,S,B,intendedPCID,nwPCID,nwpk_EV,N_S,N_B,N_EV,N_OEM_S,N_OEM_B));
+    event(endEV(intendedPCID,OEM,pk_EV,nwPCID,nwpk_EV,N_EV));
+(* THIS MUST BE TRUE. EV credentials can be updated (in this honest sell) and B receives the new nwPCID *) (* As proven above this is also true in general *)
+    inj-event(endB(bought,B,S,intendedPCID,nwPCID,N_B,N_OEM_B)) ==> inj-event(endEV(intendedPCID,OEM,pk_EV,nwPCID,nwpk_EV,N_EV)).
+
+(* The following attack is not a real life threat because a real OEM can atomically register the ongoing sell transaction as soon as it checks that it is authorized *)
+(* In the attack trace shown, whatever check OEM do on selling authorization and about transaction being ongoing, the check can always be made
+   happen simultaneously allowing two instances of the OEM to perform the sell two times without noticing each other *)
+(* In a real life implementation of the OEM service, the server can atomically write that the transaction is ongoing as soon as it checked the transaction authorization *)
+(* Moreover this doesn't create any vulnerability because B and EV remain synchronize (in this sense look at the proof inj-event(endB(..,PCID,nwPCID,..)) ==> inj-event(endEV(PCID,..,nwPCID,..)) *)
+query ID_B: host, ID_S: host, PCID: id, nwPCID: id, PCID2: id, nwPCID2: id, N_B1: nonce, N_OEM_B1: nonce, N_B2: nonce, N_OEM_B2: nonce;
+    event(endB(bought,ID_B,ID_S,PCID,nwPCID,N_B1,N_OEM_B1)) &&
+    event(endB(bought,ID_B,ID_S,PCID2,nwPCID2,N_B2,N_OEM_B2)) && N_B1 <> N_B2.
+(* This is the same query and probem but seen from the eye of the seller:
+query ID_B: host, ID_S: host, PCID: id, N_S1: nonce, N_OEM_S1: nonce, N_S2: nonce, N_OEM_S2: nonce;
+    event(endS(sold,ID_S,ID_B,PCID,N_S1,N_OEM_S1)) &&
+    event(endS(sold,ID_S,ID_B,PCID,N_S2,N_OEM_S2)) && N_S1 <> N_S2. *)
+
+(* The process *)
+
+(* Process modelling Electric vehicles *)
+let p0(ID_EV: host, sk_EV: sskey, PCID: id, ID_OEM: host, pk_OEM: spkey) =
+    (* The attacker starts the process by choosing identity xA,
+       We check that xA is honest (A is EV)
+    *)
+        in(proximity_c, (xA: host));
+    if xA = ID_EV then
+    let pk_EV = spk(sk_EV) in
+    in(proximity_c, (=rekey,N_EV: nonce)); (* msg1i_EV *)
+    new nwsk_EV: sskey;
+    let nwpk_EV = spk(nwsk_EV) in
+    event beginEV(PCID,ID_OEM,pk_EV,nwpk_EV,N_EV);
+    let msg1o_EV = sign((PCID,ID_OEM,nwpk_EV,N_EV),sk_EV) in
+    out(proximity_c, msg1o_EV);
+    in(proximity_c, msg2i_EV: bitstring);
+    let (nwPCID: id, =nwpk_EV) = checksign(msg2i_EV,pk_OEM) in
+    (* here the certificate was verified and the new key can be considered installed and valid *)
+    event endEV(PCID,ID_OEM,pk_EV,nwPCID,nwpk_EV,N_EV);
+    let msg2o_EV = sign((nwPCID,N_EV),nwsk_EV) in
+    out(proximity_c, msg2o_EV);
+    0.
+
+(* Process modelling Sellers *)
+let p1(ID_S: host, ID_B: host, sk_S: sskey, PCID: id, pk_OEM: spkey) =
+        in(internet_c, (xX: host));
+    if xX = ID_S then
+    in(internet_c,(=ID_S,N_S: nonce, N_EV: nonce));
+    new N_OEM_S: nonce;
+    event beginS(sell,ID_S,ID_B,PCID,N_S,N_OEM_S);
+    let msgo1_S = (rekey,N_EV) in
+    out(proximity_c, msgo1_S);
+    let msgo2_S = sign((sell,ID_S,ID_B,PCID,N_S,N_OEM_S),sk_S) in
+    out(internet_c, msgo2_S);
+    (* here you may orkestrate OEM and EV messages passage from internet_c to proximity_c*)
+    in(internet_c, msgi1_S: bitstring);
+    let (=sold, =ID_S, =ID_B, =PCID, =N_S, =N_OEM_S) = checksign(msgi1_S,pk_OEM) in
+    event endS(sold,ID_S,ID_B,PCID,N_S, N_OEM_S);
+    0.
+
+(* Process modelling Buyers *)
+let p2(ID_S: host, ID_B: host, sk_B: sskey, PCID: id, pk_OEM: spkey) =
+        in(internet_c, (xU: host));
+    if xU = ID_B then
+    in(internet_c,(=ID_B,N_B: nonce));
+    new N_OEM_B: nonce;
+    event beginB(buy,ID_B,ID_S,PCID,N_B,N_OEM_B);
+    let msgo1_B = sign((buy,ID_B,ID_S,PCID,N_B,N_OEM_B),sk_B) in
+    out(internet_c, msgo1_B);
+    in(internet_c, msgi1_B: bitstring);
+    let (=bought, =ID_B, =ID_S, =PCID, nwPCID: id, =N_B, =N_OEM_B) = checksign(msgi1_B,pk_OEM) in
+    event endB(bought,ID_B,ID_S,PCID,nwPCID,N_B,N_OEM_B);
+    0.
+
+(* Process modelling OEM *)
+let p3(ID_OEM: host, sk_OEM: sskey) =
+        in(internet_c, (seller: host, xJ: host, buyer: host));
+    if xJ = ID_OEM then
+    new N_S: nonce;
+    new N_B: nonce;
+    new N_EV: nonce;
+    (*may add in(internet_c,(seller,=sell))*)
+    (*may add in(internet_c,(buyer,=buy))*)
+    out(internet_c,(seller,N_S,N_EV));
+    out(internet_c,(buyer,N_B));
+    in(internet_c,msg1i_OEM: bitstring);
+    let (=sell, =seller, =buyer, PCID: id, =N_S, N_OEM_S: nonce) = getmess(msg1i_OEM) in
+    (* Check messages signatures based on known public keys *)
+    get tbl_knownHost(=seller,pk_S) in
+    let (=sell, =seller, =buyer, =PCID, =N_S, =N_OEM_S) = checksign(msg1i_OEM,pk_S) in
+    (* check that seller own the car (PCID) it is trying to sell *)
+    get tbl_ownerships(=seller,=PCID) in
+    (* check that seller isn't trying to sell a car it already sold *)
+    get tbl_sold(=seller,=PCID) in
+        0
+    else
+    
+    in(internet_c,msg2i_OEM: bitstring);
+    let (=PCID, =ID_OEM, nwpk_EV: spkey, =N_EV) = getmess(msg2i_OEM) in
+    get tbl_carRegister(=PCID,pk_EV) in
+    let (=PCID, =ID_OEM, =nwpk_EV, =N_EV) = checksign(msg2i_OEM,pk_EV) in
+
+    in(internet_c,msg3i_OEM: bitstring);
+    let (=buy, =buyer, =seller, =PCID, =N_B, N_OEM_B: nonce) = getmess(msg3i_OEM) in
+    get tbl_knownHost(=buyer,pk_B) in
+    let (=buy, =buyer, =seller, =PCID, =N_B, =N_OEM_B) = checksign(msg3i_OEM,pk_B) in
+    
+    event beginOEM(ID_OEM,seller,buyer,PCID,N_S,N_B,N_EV,N_OEM_S,N_OEM_B);
+
+    (* here OEM talk with EV *)
+    new nwPCID: id;
+    (* Save intermediate record for new key (still to be confirmed) *)
+    (* this prevent that EV saves the new key and delete the old getting out of sink with credentials saved by the OEM.
+       This way, EV doesn't loose sincronization with OEM even if OEM don't receive final new key confirmation message *)
+    insert tbl_carRegister(nwPCID,nwpk_EV);
+    let cert = sign((nwPCID,nwpk_EV),sk_OEM) in
+    out(proximity_c,cert); (* can change proximity_c with internet_c *)
+    in(proximity_c,msg4i_OEM: bitstring);
+    let (=nwPCID,=N_EV) = checksign(msg4i_OEM,nwpk_EV) in
+    (* key updated sucesfully. Register new buyer and remove ownership to seller *)
+    insert tbl_sold(seller, PCID);
+    insert tbl_ownerships(buyer, nwPCID);
+    event endOEM(ID_OEM,seller,buyer,PCID,nwPCID,nwpk_EV,N_S,N_B,N_EV,N_OEM_S,N_OEM_B);
+    out(internet_c,sign((sold,seller,buyer,PCID,N_S,N_OEM_S),sk_OEM));
+    out(internet_c,sign((bought,buyer,seller,PCID,nwPCID,N_B,N_OEM_B),sk_OEM));
+    0.
+
+let registerNewHost(identity: host, pk: spkey)=
+    insert tbl_knownHost(identity,pk).
+
+let registerNewVeicle(identity: host, carID: id, carPk: spkey)=
+    insert tbl_ownerships(identity,carID);
+    insert tbl_carRegister(carID,carPk).
+
+let processRegisterAttackerHost() =
+    in(internet_c, (h: host, k: spkey));
+    (* Prevent the attacker from overwriting the honest identities *)
+    if h <> S && h <> B && h <> otherS && h <> otherB && h <> OEM && h <> otherOEM then
+        insert tbl_knownHost(h, k);
+        out(internet_c, true).
+
+process
+    new ssk_OEM: sskey;
+    new ssk_S: sskey;
+    new ssk_B: sskey;
+    new ssk_otherS: sskey;
+    new ssk_otherB: sskey;
+    new ssk_EV_intended: sskey;
+    new ssk_EV_scam: sskey;
+    new ssk_EV_other: sskey;
+    new ssk_otherOEM: sskey;
+
+    (* derive public keys and publish them *)
+    let pk_S = spk(ssk_S) in out(internet_c, pk_S); out(proximity_c, pk_S);
+    let pk_B = spk(ssk_B) in out(internet_c, pk_B); out(proximity_c, pk_B);
+    let pk_otherS = spk(ssk_otherS) in out(internet_c, pk_otherS); out(proximity_c, pk_otherS);
+    let pk_otherB = spk(ssk_otherB) in out(internet_c, pk_otherB); out(proximity_c, pk_otherB);
+    let pk_OEM = spk(ssk_OEM) in out(internet_c, pk_OEM); out(proximity_c, pk_OEM);
+    let pk_intended = spk(ssk_EV_intended) in out(internet_c, pk_intended); out(proximity_c, pk_intended);
+    let pk_scam = spk(ssk_EV_scam) in out(internet_c, pk_scam); out(proximity_c, pk_scam);
+    let pk_other = spk(ssk_EV_other) in out(internet_c, pk_other); out(proximity_c, pk_other);
+    let pk_otherOEM = spk(ssk_otherOEM) in out(internet_c, pk_otherOEM); out(proximity_c, pk_otherOEM);
+
+    (* 2. DATABASE REGISTRATION *)
+    (
+        (* Register Hosts *)
+        registerNewHost(S, pk_S) |
+        registerNewHost(B, pk_B) |
+        registerNewHost(otherS, pk_otherS) |
+        registerNewHost(otherB, pk_otherB) |
+        !processRegisterAttackerHost() |
+
+        (* Register Vehicle Ownerships and their respective keys *)
+        registerNewVeicle(S, intendedPCID, pk_intended) |
+        registerNewVeicle(S, scamPCID, pk_scam) |
+        registerNewVeicle(otherS, otherPCID, pk_other) |
+
+        (* 3. ACTIVE PROTOCOL EXECUTION *)
+        (
+            (* The OEM handles incoming requests infinitely *)
+            !p3(OEM,ssk_OEM)
+            | !p3(otherOEM,ssk_otherOEM) (* this OEM is shown to not beeing able to mediate any transaction *)
+           
+            (* Vehicles *)
+            | !p0(intendedEV, ssk_EV_intended, intendedPCID, OEM, pk_OEM)
+            | !p0(scamEV, ssk_EV_scam, scamPCID, OEM, pk_OEM)
+            | !p0(otherEV, ssk_EV_other, otherPCID, OEM, pk_OEM)
+
+            (* SELLER INTENTIONS *)
+            | !p1(otherS, B, ssk_otherS, otherPCID, pk_OEM) (* otherS attempts to sell a car to B that B expect to get from S *)
+            | !p1(S, B, ssk_S, intendedPCID, pk_OEM)        (* S attempts to sell a car to B and B wants it *)
+            | !p1(S, B, ssk_S, scamPCID, pk_OEM)            (* S attempts to sell a car to B that B doesen't want *)
+            | !p1(S, B, ssk_S, otherPCID, pk_OEM)           (* S attempts to sell a car it doesn't own *)
+
+            (* BUYER INTENTIONS *)
+            | !p2(S, B, ssk_B, intendedPCID, pk_OEM)
+            | !p2(S, B, ssk_B, otherPCID, pk_OEM)
+            | !p2(S, otherB, ssk_otherB, intendedPCID, pk_OEM)
+
+        )
+    )

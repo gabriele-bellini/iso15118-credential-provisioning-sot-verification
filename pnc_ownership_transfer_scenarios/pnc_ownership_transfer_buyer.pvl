@@ -1,0 +1,198 @@
+(*
+ * Copyright (C) 2026 Gabriele Bellini, Roberto Metere
+ * SPDX-License-Identifier: Apache-2.0
+ * 
+ * Gabriele Bellini, University of Milan, Italy
+ * Roberto Metere, University of York, UK
+ *
+ * Attack scenario of ownership transfer with and without TPM.
+ *
+ * OEM<--[c_currentkey]-->eMSP<--[c_control]-->EV
+ *
+ * where c_currentkey and c_control are private channels:
+ * - c_currentkey is an authenticated feed of the currently-valid
+ *   provisioning pubkey
+ * - c_control is a modelling shortcut: rightful in-possession
+ *   vehicle obtains its contract key
+ *
+ * To show the attack, we run two phases:
+ * - phase 0: first ownership (vehicle in the hands of owner #1)
+ * - phase 1: after the sale  (vehicle in the hands of owner #2)
+ *
+ * To some extent, we model some steps from -20 that are actually conformance-tested in -21.
+ * - [V2G20-1970,-1971] vs TC21_*_AuthorizationSetup
+ * - [V2G20-1973,-2202,-2203,-2204,-2223] vs TC21_*_CertificateInstallation
+ * - [V2G20-1978,-1979,-2234] vs TC21_*_Authorization
+ * - [V2G20-2644] vs TC21_*_SessionStop
+ *
+ * Those conformance tests will at most block a replay attack. In our scenario,
+ * the attacker does NOT replay: holding the provisioning key, it DECRYPTS the
+ * contract key and produces FRESH, valid signatures over each new
+ * GenChallenge.
+ * It therefore passes exactly the conformance checks designed to stop replay
+ *)
+set traceDisplay = long.
+set attacker = active.
+
+free pub:channel.
+
+free c_control:channel [private].
+free c_currentkey:channel [private].
+
+type pkey.
+fun pk(bitstring):pkey. (* private key is a bitstring *)
+
+(* digital signature *)
+fun sign(bitstring, bitstring):bitstring.
+reduc forall m:bitstring, k:bitstring; checksign(sign(m,k), pk(k)) = m.
+reduc forall m:bitstring, k:bitstring; read(sign(m,k)) = m.
+
+(* public-key encryption *)
+fun aenc(bitstring, pkey):bitstring.
+reduc forall m:bitstring, k:bitstring; adec(aenc(m, pk(k)), k) = m.
+
+free PCID:bitstring. (* Vehicle identity *)
+free sk_OEM:bitstring  [private].
+free sk_eMSP:bitstring [private].
+
+(*
+ * Bounded GenChallenge space. These challenges are in the set that the
+ * "large amount" the attacker pre-signs using the TPM as an oracle.
+ * This implies that those challenges are "low entropy/predictable".
+ *)
+free low_entropy_oracle_challenge1:bitstring.
+free low_entropy_oracle_challenge2:bitstring.
+free low_entropy_oracle_challenge3:bitstring.
+
+(* installed at factory *)
+event ProvInstalled((* PCID *)bitstring, pkey).
+
+(* fresh provisioning pubkey installed on resale *)
+event ReKeyed(pkey).
+
+(* issued to new owner *)
+event ContractIssued((* eMAID *)bitstring, (* contract *)pkey).
+
+(* the current vehicle really authorised this session *)
+event LegitAuthorize((* eMAID *)bitstring, (* challenge *)bitstring).
+
+(* eMSP charges this account for this session *)
+event eMSPBills((* eMAID *)bitstring, (* challenge *)bitstring).
+
+(* contract private key the attacker reconstructed *)
+event ContractKeyLeaked((* eMAID *)bitstring).
+
+(* eMSP accepted a CertInstallReq prov-signature over this GenChallenge *)
+event VehicleAuthenticated((* PCID *)bitstring, (* Challenge *)bitstring).
+
+(* Billing authentication *)
+query e:bitstring, c:bitstring;
+    event(eMSPBills(e,c)) ==> event(LegitAuthorize(e,c)).
+
+(* Contract key secrecy *)
+query e:bitstring;
+    event(ContractKeyLeaked(e)).
+
+(*
+ * VehicleAuthenticated is reachable only if some party produced a valid
+ * signature for the eMSP's issued challenge.
+ * Any reachable VehicleAuthenticated is necessarily forged from
+ * precollected signatures (TPM used as an oracle).
+ *)
+query x:bitstring, c:bitstring;
+   event(VehicleAuthenticated(x,c)).
+
+(*
+ * The eMSP is only in phase1 (phase0 is only the first ownership and we do
+ * not model whatever the previous owner did).
+ *
+ * The new owner gets a contract; the contract private key is
+ * delivered encrypted to the un-rekeyed provisioning public key.
+ *
+ * eMSP runs PnC authorisation and bills the account.
+ *)
+let eMSP =
+  phase 1;
+  in(c_currentkey, pk_EV':pkey);
+  new emaid:bitstring; (* e-mobility account identifier *)
+  new sk_c:bitstring;
+  let pk_c = pk(sk_c) in
+  out(pub, sign((emaid, pk_c), sk_eMSP)); (* contract certificate *)
+  event ContractIssued(emaid, pk_c);
+  
+  out(pub, aenc(sk_c, pk_EV')); (* CertificateInstallationRes *)
+  out(c_control, (emaid, sk_c));
+  
+    !(in(pub, g:bitstring); if g = sk_c then event ContractKeyLeaked(emaid))
+  |
+  
+  (* PnC auth + billing *)
+  (* 
+  * anyone able to sign it with the contract key is authorised and the
+  * account is billed. The eMSP cannot tell the legitimate vehicle from
+  * an impersonator.
+  *)
+    !(
+       new challenge:bitstring;
+       out(pub, challenge);
+       in(pub, s':bitstring);
+       let (=challenge) = checksign(s', pk_c) in
+       event eMSPBills(emaid, challenge)
+     ).
+
+(* 
+ * The legit vehicle plays only in phase 1
+ *)
+let EV =
+  phase 1;
+  in(c_control, (emaid':bitstring, sk_c':bitstring));
+  !(
+      in(pub, challenge':bitstring);
+      event LegitAuthorize(emaid', challenge');
+      out(pub, sign(challenge', sk_c'))
+   ).
+
+
+(*
+ * eMSP installation verifier
+ * AuthorizationSetupRes issues GenChallenge; CertificateInstallationReq
+ * 
+ * This models an impersonation by the previous owner if the EV subprocess
+ * does not run, i.e., we do not have a signing (legit-)EV.
+ * Thus, a reachable VehicleAuthenticated implies impersonation.
+ *)
+let installVerifier(challenge:bitstring) =
+  phase 1;
+  in(c_currentkey, pk_EV':pkey);
+  out(pub, challenge);
+  in(pub, s':bitstring);
+  let (=PCID, =challenge) = checksign(s', pk_EV') in
+  event VehicleAuthenticated(PCID, challenge).
+
+(*
+ * To implement: OEM in difference scenarios.
+ *
+ * Plays both phase0 and phase1.
+ * Generates the factory provisioning key, publishes the provisioning cert,
+ * (optionally) leaks it (no-TPM), and tells the eMSP which provisioning
+ * public key is currently valid - this last feed is our revocation model.
+ *
+ * NOTE In external file: copy/paste the following as a start, then add 
+ * customized behaviour according to the scenario to model.
+
+let OEM =
+  (* phase 0: first ownership *)
+  new sk_EV:bitstring;
+  let pk_EV = pk(sk_EV) in
+  out(pub, sign((PCID, pk_EV), sk_OEM));
+  event ProvInstalled(PCID, pk_EV);
+  0.
+
+process
+    ( out(pub, pk(sk_OEM)) )
+  | ( out(pub, pk(sk_eMSP)) )
+  | OEM
+  | eMSP
+
+ *
+ *)

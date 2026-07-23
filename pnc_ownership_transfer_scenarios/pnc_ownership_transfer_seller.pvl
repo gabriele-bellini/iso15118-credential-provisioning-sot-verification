@@ -1,0 +1,87 @@
+(*
+ * Copyright (C) 2026 Gabriele Bellini, Roberto Metere
+ * SPDX-License-Identifier: Apache-2.0
+ *)
+
+set traceDisplay = long.
+set attacker = active.
+
+free pub:channel.
+free feed:channel [private].
+
+type pkey.
+fun pk(bitstring): pkey.
+fun sign(bitstring, bitstring):bitstring.
+reduc forall m:bitstring, k:bitstring; checksign(sign(m,k), pk(k)) = m.
+reduc forall m:bitstring, k:bitstring; read(sign(m,k)) = m.
+
+free emaid_seller:bitstring.
+free sk_C_seller:bitstring [private]. (* TPM protected! *)
+
+(* the rightful current holder willed this session *)
+event OwnerInitiates((* eMAID *)bitstring, (* challenge *)bitstring).
+
+(* the current vehicle really authorised this session *)
+event LegitAuthorize((* eMAID *)bitstring, (* challenge *)bitstring).
+
+(* eMSP charges this account for this session *)
+event eMSPBills((* eMAID *)bitstring, (* challenge *)bitstring).
+
+
+(* Seller protection *)
+query c:bitstring;
+    inj-event(eMSPBills(emaid_seller, c)) ==> inj-event(OwnerInitiates(emaid_seller, c)).
+
+(* EV signs nevertheless *)
+query e:bitstring, c:bitstring;
+    event(eMSPBills(e,c)) ==> event(LegitAuthorize(e,c)).
+
+let EV_SellerOwned =
+  ! ( in(pub, challenge':bitstring);
+  event OwnerInitiates(emaid_seller, challenge');
+  event LegitAuthorize(emaid_seller, challenge');
+  out(pub, sign(challenge', sk_C_seller)) ).
+
+(* The car signs bills anyway, but without seller consent *)
+let EV_BuyerOwned =
+  phase 1;
+  ! ( in(pub, challenge':bitstring);
+  event LegitAuthorize(emaid_seller, challenge');
+  out(pub, sign(challenge', sk_C_seller)) ).
+
+let eMSP_PreSale =
+  ! (
+    in(feed, =emaid_seller); (* revocation-status check *)
+    new challenge:bitstring;
+    out(pub, challenge);
+    in(pub, s':bitstring);
+    let (=challenge) = checksign(s', pk(sk_C_seller)) in
+    event eMSPBills(emaid_seller, challenge)
+  ).
+
+let eMSP_AfterSale =
+  phase 1;
+  ! ( eMSP_PreSale ).
+
+(* If the key is leaked or not, it won't change the outcome *)
+let LeakKey =
+    phase 1;
+    out(pub, sk_C_seller).
+
+let KeepValid_SellerContract = phase 1; ! out(feed, emaid_seller).
+
+
+(*
+ * NOTE In external file: copy/paste the following as a start, then modify to
+ * capture behaviour according to the scenario to model.
+
+process
+    EV_SellerOwned
+  | eMSP_PreSale
+  | eMSP_AfterSale
+  | EV_BuyerOwned
+  | KeepValid_SellerContract (* Comment to revoke *)
+  | LeakKey (* Comment if TPM *)
+
+ *
+ *)

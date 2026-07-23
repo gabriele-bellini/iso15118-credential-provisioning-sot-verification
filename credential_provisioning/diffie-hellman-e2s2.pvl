@@ -1,0 +1,106 @@
+(*
+ * Copyright (C) 2026 Gabriele Bellini, Roberto Metere
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ *  Gabriele Bellini, University of Milan, Italy
+ *  Roberto Metere, University of York, UK
+ *
+ * Trditional ephemeral Diffie-Hellman C(e2,s2)
+ * (from NIST Special Publication 800-56A)
+ *
+ * Scenario (e2,s2)-backward-secrecy:
+ *
+A -> B : g*esk1, g*skA   (esk1 fresh)
+B -> A : g*esk2, g*skB  (esk2 fresh)
+A and B compute the key as k = kdf((g*esk1)*esk2 || (g*skA)*skB) = kdf((g*esk2)*esk1 || (g*skB)*skA))
+A -> B : { communication }k
+ *
+ *
+ * Forward / backward privacy of the payload is done through
+ * choice[...] - observational equivalence.
+ *
+ *  - To isolate BACKWARD secrecy only: replace
+ *      choice[communications_betweenUncompromisedParties_l,
+ *             communications_betweenUncompromisedParties_r]
+ *    with plain  communications_betweenUncompromisedParties_l  (Phase 0).
+ *
+ *  - To isolate FORWARD secrecy only: replace
+ *      choice[communications_afterKeyRenewal_l,
+ *             communications_afterKeyRenewal_r]
+ *    with plain  communications_afterKeyRenewal_l  (Phase 5).
+ *
+ *
+ * NOTE: with deterministic enc and no decryption oracle on an honest key,
+ * strong secrecy coincides with reachability secrecy here. The added value is
+ * certifying no partial leak, not merely non-extraction. Equivalence mode
+ * over 5 phases + the DH equation can need `set` tuning and may report false
+ * attacks.
+ *
+ * NOTE
+ * Backward-secrecy-only variant of `forwardBackwardSecrecyOurE2S2.pv`.
+ * The Phase 0 (forward-secrecy) payload is pinned to a single constant,
+ * so it is identical on both sides of the biprocess and drops out of the
+ * equivalence check. The ONLY choice[...] remaining is on the Phase 5
+ * (post-full-key-renewal) payload, so a successful ProVerif proof here
+ * is an unambiguous, standalone proof of backward secrecy alone.
+ *)
+
+free c: channel.
+
+type group.
+type scalar.
+type key.
+
+(* Key derivation function *)
+fun kdf(group, group): key.
+
+(* Shared key encryption *)
+fun enc(bitstring, key): bitstring.
+reduc forall x: bitstring, y: key; dec(enc(x,y),y) = x.
+
+(* Diffie-Hellman *)
+const g: group.
+fun dh_oper(group, scalar): group.
+equation forall x: scalar, y: scalar; dh_oper(dh_oper(g, x), y) = dh_oper(dh_oper(g, y), x).
+
+(* Test protocol termination *)
+event messageReceived(bitstring).
+
+(* Test whether communications are secret *)
+free future_communications_fromCompromisedSkOwner: bitstring [private].
+free future_communications_toCompromisedSkOwner: bitstring [private].
+free communications_betweenCompromisedParties: bitstring [private].
+free communications_betweenUncompromisedParties: bitstring [private].
+free communications_afterFullKeyRenewal: bitstring [private].
+
+(* Forward *)
+free communications_betweenUncompromisedParties_l: bitstring.
+free communications_betweenUncompromisedParties_r: bitstring.
+
+(* Backward *)
+free communications_afterKeyRenewal_l: bitstring.
+free communications_afterKeyRenewal_r: bitstring.
+
+
+(* EV - we keep generic naming as the protocol is generic *)
+let p0(skA: scalar, pkB: group) =
+    new esk0: scalar;
+    out(c,dh_oper(g, esk0));
+    in(c,epk1: group);
+    let z1 = dh_oper(epk1, esk0) in
+    let z2 = dh_oper(pkB, skA) in
+    let k = kdf(z1,z2) in
+    in (c,m: bitstring);
+    let msg = dec(m,k) in
+    event messageReceived(msg);
+    0.
+
+(* eMSP *)
+let p1(skB: scalar, pkA: group, message: bitstring) =
+    in(c,epk0: group);
+    new esk1: scalar;
+    let z1 = dh_oper(epk0, esk1) in
+    let z2 = dh_oper(pkA, skB) in
+    let k = kdf(z1,z2) in
+    out(c,dh_oper(g, esk1));
+    out(c, enc(message,k)).

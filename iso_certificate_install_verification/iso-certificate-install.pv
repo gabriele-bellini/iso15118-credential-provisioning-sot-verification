@@ -1,0 +1,164 @@
+(*
+ * Copyright (C) 2026 Gabriele Bellini, Roberto Metere
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ *  Gabriele Bellini, University of Milan, Italy
+ *  Roberto Metere, University of York, UK
+ *
+ * Scenario EV-Certificate-Install-Protocol:
+ *
+ * EV CERTIFICATE INSTALL PROTOCOL
+ * 
+ * Message 1: A -> B : {pkEV, PCID}skOEM
+ * Message 2: B -> A : {pkc, {skc}K }skCPS , pke   (pke is fresh)
+ * 
+ * Change lines 120 to verify or to see the attack.
+ * 
+ * Notice: A and B can compute K as skEV*pke or ske*pkEV
+ *)
+
+(* Loops if types are ignored *)
+set ignoreTypes = false.
+
+free c: channel.
+
+type host.
+(* type nonce. *)
+type key.
+type pkey.
+type skey.
+type spkey.
+type sskey.
+type group. (* for group elements (e.g. finite fields or elliptic curve) *)
+type scalar. (* for secret keys (e.g. like exponents in FF-DH) *)
+
+
+fun scalr_to_key(scalar): key [data,typeConverter].
+
+free sk_EV: scalar [private].
+free sskCPS: sskey [private].
+free sskOEM: sskey [private].
+
+(* fun nonce_to_bitstring(nonce): bitstring [data,typeConverter]. *)
+
+(* Diffie-Hellman *)
+const g: group.
+fun dh_oper(group, scalar): group. (* This can be exponentiation, in case of FF-DH, or multiplication in the group, in case of EC-DH *)
+equation forall x: scalar, y: scalar; dh_oper(dh_oper(g, x), y) = dh_oper(dh_oper(g, y), x).
+
+(* Shared key encryption *)
+fun KDF(group): key. (* This model a generic key derivation function, like sha256 or bcrypt *)
+fun enc(scalar, key): bitstring.
+reduc forall m: scalar, k: key; dec(enc(m,k),k) = m. (* in this case m is a secret key*)
+
+(* Public key encryption
+fun pk(skey): pkey.
+fun aencrypt(bitstring, pkey): bitstring.
+reduc forall x: bitstring, y: skey; adecrypt(aencrypt(x,pk(y)),y) = x. *)
+
+(* Signatures *)
+fun spk(sskey): spkey.
+fun sign(group, bitstring, sskey): bitstring.
+reduc forall pk: group, m: bitstring, k: sskey; getmess(sign(pk,m,k)) = (pk, m).
+reduc forall pk: group, m: bitstring, k: sskey; checksign(sign(pk,m,k), spk(k)) = (pk, m).
+
+
+(* Secrecy assumptions *)
+not attacker(sk_EV).
+not attacker(sskCPS).
+not attacker(sskOEM).
+
+(* 2 honest host names A (EV) and B (eMSP) *)
+free EV, eMSP, eMSP2: host.
+
+(* Queries *)
+free future_comunications: scalar [private]. (* this can have any type *)
+query attacker(future_comunications).
+
+event beginA(host, host, group).
+event beginB(host, host, group, group).
+event endB(host, host, group, scalar, scalar).
+event endA(host, host, scalar, group, scalar).
+
+(* test if the protocol was modeled correctly *)
+(* each actor start and end consistently *)
+(*query h1: host, h2: host, skEV: scalar, epk: group, skc: scalar; 
+    inj-event(endA(h1,h2,skEV,epk,skc)) ==> inj-event(beginA(h1,h2,dh_oper(g,skEV))).*)
+(*query h1: host, h2: host, pkEV: group, esk: scalar, skc: scalar; 
+    inj-event(endB(h1,h2,pkEV,esk,skc)) ==> inj-event(beginB(h1,h2,pkEV,dh_oper(g,esk))).*)
+(* test if the execution order is correctly model *)
+(*query h1: host, h2: host, pkEV: group, epk: group; 
+    event(beginB(h1,h2,pkEV,epk)) ==> event(beginA(h1,h2,pkEV)).*)
+
+(* protocol CORRECTNESS (and execution order)
+   if A terminate, B must be already terminated and A must produce the same parameter sent by B *)
+query h1: host, h2: host, skEV: scalar, esk: scalar, skc: scalar; 
+    inj-event(endA(h1,h2,skEV,dh_oper(g,esk),skc)) ==> inj-event(endB(h1,h2,dh_oper(g,skEV),esk,skc)).
+
+(* protocol AUTENTICATION *)
+query h1: host, h2: host, pkEV: group, esk: scalar, skc: scalar; 
+    inj-event(endB(h1,h2,pkEV,esk,skc)) ==> inj-event(beginA(h1,h2,pkEV)).
+query h1: host, h2: host, skEV: scalar, epk: group, skc: scalar; 
+    inj-event(endA(h1,h2,skEV,epk,skc)) ==> inj-event(beginB(h1,h2,dh_oper(g,skEV),epk)).
+
+
+(* The process *)
+
+let p0(skA: scalar, OEMsig: bitstring, spkCPS: spkey) = 
+    (*
+     * The attacker starts the initiator by choosing identity xA, and xB
+     * We check that xA and xB are honest (e.g. A is EV) 
+     *)
+    in(c, (xA: host, xB: host));
+    if xA = EV && (xB = eMSP || xB = eMSP2) then
+    let skEV = skA in
+    let pkEV = dh_oper(g, skEV) in
+    event beginA(xA, xB, pkEV);
+    (* here I need an event to say that EV started the protocol *)
+    out(c,OEMsig);
+    in(c, (epk: group, sg: bitstring)); 
+    (* change these two lines to see the attack or prove security*)
+    let (pkc: group, skc_encrypted: bitstring) = checksign(sg, spkCPS) in  (* change these two lines to see the attack or prove security*)
+    (*  let (pkc: group, skc_encrypted: bitstring) = getmess(sg) in *) (* change these two lines to see the attack or prove security*)
+    let k = KDF(dh_oper(epk, skEV)) in 
+    let skc = dec(skc_encrypted, k) in
+    out(c,enc(future_comunications, scalr_to_key(skc))); (* TODO add that B can read future_comunications *)
+    if pkc = dh_oper(g, skc) then 
+    (
+      event endA(xA, xB, skEV, epk, skc);
+      0
+    )
+    else
+    0.
+
+let p1(sskCPS: sskey, spkOEM: spkey) = 
+    in(c, (xA: host, xB: host, OEMsig: bitstring));
+    if (xB = eMSP || xB = eMSP2) && xA = EV then
+    let (pkEV: group, idEV: bitstring) = checksign(OEMsig, spkOEM) in
+    new ske: scalar; 
+    let pke = dh_oper(g, ske) in
+    event beginB(xA, xB, pkEV, pke);
+    let k = KDF(dh_oper(pkEV, ske)) in 
+    new skc: scalar; 
+    let pkc = dh_oper(g, skc) in
+    let skc_encrypted = enc(skc,k) in
+    let sg = sign(pkc,skc_encrypted,sskCPS) in
+    out(c,sg); 
+    event endB(xA, xB, pkEV, ske, skc);
+    0.
+
+process 
+    let spkCPS = spk(sskCPS) in
+    out(c, spkCPS); (* public because it is part of the PKI infrastructure *)
+    let spkOEM = spk(sskOEM) in
+    out(c, spkOEM); (* public because it is part of the PKI infrastructure *)
+    let pkEV = dh_oper(g,sk_EV) in
+    (* out(c, pkEV); it is not part of the PKI providers, it will disclosed only diring the contract installation protocol *)
+    new PCID: bitstring;
+    let OEMsig = sign(pkEV,PCID,sskOEM) in
+    
+    (
+      (!p0(sk_EV, OEMsig, spkCPS)) (* A allways have his keys, their certificate, and the publick key of CPS between its installed certificates *)
+      |
+      (!p1(sskCPS, spkOEM)) (* B allways have a way to acces CPS and make it sign. Also, B knows OEM publick key (due to the pub. key infrastructure) *)
+    )

@@ -1,0 +1,66 @@
+(*
+ * Copyright (C) 2026 Gabriele Bellini, Roberto Metere
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ *  Gabriele Bellini, University of Milan, Italy
+ *  Roberto Metere, University of York, UK
+ *
+ * Adaptation of ephemeral Diffie-Hellman C(e2,s2)
+ * (originally from NIST Special Publication 800-56A)
+ *
+ * Scenario (e2,s2)-variant-backward-secrecy-leak-sA-sB:
+ *  - swaps the usage of of ephemeral/static keys if compared to NIST
+ *
+ * Depends:diffie-hellman-e2s2-var.pvl
+ *)
+
+process
+  new skA: scalar;
+  let pkA = dh_oper(g, skA) in
+  out(c, pkA);
+  new skB: scalar;
+  let pkB = dh_oper(g, skB) in
+  out(c, pkB);
+  (
+    (*
+     * Phase 1: pre-compromise traffic under the
+     * original static key skA. Not tested here.
+     *)
+    ( (!p0(skA, pkB)) | (!p1(skB, pkA, communications_betweenUncompromisedParties)) )
+    |
+    (*
+     * Phase 2: Leaks
+     *)
+    phase 2;
+    out(c, skA);
+    out(c, skB);
+    ( (!p0(skA, pkB)) | (!p1(skB, pkA, future_communications_fromCompromisedSkOwner)) )
+    |
+    (*
+     * Phase 3: RE-KEYING / FULL HEAL. The EV is issued a fresh
+     * static key skA2 the attacker never learns (e.g. via the re-keying
+     * protocol of Section "Re-keying protocol").
+     * This is the ONLY payload under the equivalence check.
+     *)
+    phase 3;
+    new skA2: scalar;
+    let pkA2 = dh_oper(g, skA2) in
+    out(c, pkA2);
+    ( (!p0(skA2, pkB)) | (!p1(skB, pkA2, choice[communications_afterKeyRenewal_l, communications_afterKeyRenewal_r])) )
+  )
+
+(*
+--------------------------------------------------------------
+Verification summary:
+
+Observational equivalence cannot be proved.
+
+--------------------------------------------------------------
+
+	User time (seconds): 4.18
+	System time (seconds): 0.09
+	Percent of CPU this job got: 99%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:04.28
+	Maximum resident set size (kbytes): 92312
+
+*)

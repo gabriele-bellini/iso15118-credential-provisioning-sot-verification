@@ -1,0 +1,138 @@
+(*
+ * Copyright (C) 2026 Gabriele Bellini, Roberto Metere
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ *  Gabriele Bellini, University of Milan, Italy
+ *  Roberto Metere, University of York, UK
+ *
+ * Adaptation of ephemeral Diffie-Hellman C(e2,s2)
+ * (originally from NIST Special Publication 800-56A)
+ *
+ * Scenario (e2,s2)-variant-backward-secrecy:
+ *  - swaps the usage of of ephemeral/static keys if compared to NIST
+ *
+ *)
+
+(*
+ * All key pairs shall be generated using the same domain parameters.
+ * Party A (EV) and party B (eMSP) obtain each other’s static public keys,
+ * which have been generated prior to the key-establishment process. Both
+ * parties generate ephemeral private/public key pairs and exchange the
+ * ephemeral public keys. Using the static and ephemeral keys, both parties
+ * generate a shared secret. The secret keying material is derived from the
+ * shared secret.
+ *
+ * Conceptually, Party A and Party B have previously exchanged their public
+ * keys and trust that the keys are authentic. In practice, they exchange
+ * digital certificates containing their public keys, and each party
+ * verifies the other's certificate to authenticate the public key.
+ * Public-key authenticity is therefore enforced structurally in this model
+ * (whichever public key is passed as a parameter is the one a party
+ * uses), and NOT by explicitly signing it; this file is about the secrecy
+ * of the derived session key across a key-renewal event, not about
+ * authentication.
+ *
+
+A -> B : g*esk1  (esk1 fresh)
+B -> A : g*esk2  (esk2 fresh)
+A and B compute the key as k = kdf((g*esk1)*skB || (g*skA)*esk2) = kdf((g*skB)*esk1 || (g*esk2)*skA))
+A -> B : { communication }k
+
+ *
+ * NOTE The protocol must guarantee forward secrecy and backwards secrecy.
+ *
+ * In the following code the public keys authenticity is enforced
+ * without explicitly signing them.
+ *
+ *
+ * # Backward secrecy (post-compromise security) only.
+ *
+ * Companion to `forwardSecrecyDiffieHellmanOurE2S2.pv`, which tests forward
+ * secrecy (do *pre*-compromise sessions stay secret after a later leak?) via
+ * a choice[...] pair on the Phase 1 (pre-leak) payload.
+ *
+ * Here we test the converse and complementary property: after skA (the
+ * EV's static provisioning key - the one a departing owner would retain)
+ * leaks in Phase 2, the EV is re-keyed in Phase 3 to a FRESH skA2 the
+ * attacker never learns. Does traffic sent AFTER that renewal regain full,
+ * strong secrecy, despite the attacker holding the old skA and everything
+ * it observed during the Phase 2 compromise window?
+ *
+ * To isolate this cleanly, only the Phase 3 (post-renewal) payload is put
+ * under choice[...]; Phase 1 and Phase 2 traffic use plain, non-equivalence
+ * -tested private free names, so a successful ProVerif proof here is an
+ * unambiguous, standalone proof of backward secrecy alone.
+ *)
+
+set ignoreTypes = false.
+set preciseActions = true.
+(* set attacker = passive. *)
+
+free c: channel.
+
+type group.
+type scalar.
+type key.
+
+
+(* Shared key encryption *)
+fun enc(bitstring, key): bitstring.
+reduc forall x: bitstring, y: key; dec(enc(x,y),y) = x.
+
+(* Key derivation function *)
+fun kdf(group, group): key.
+
+(* Diffie-Hellman *)
+const g: group.
+fun dh_oper(group, scalar): group.
+equation forall x: scalar, y: scalar; dh_oper(dh_oper(g, x), y) = dh_oper(dh_oper(g, y), x).
+
+(* Signatures *)
+fun sign(group, scalar): bitstring.
+reduc forall m: group, k: scalar; getmess(sign(m,k)) = m.
+reduc forall m: group, k: scalar; checksign(sign(m,k), dh_oper(g, k)) = m.
+
+(* Test protocol termination *)
+event messageReceived(bitstring).
+
+free communications_betweenCompromisedParties: bitstring [private].
+free communications_betweenUncompromisedParties: bitstring [private].
+free future_communications_fromCompromisedSkOwner: bitstring [private].
+
+(* Choice for forward secrecy *)
+free communications_betweenUncompromisedParties_l: bitstring.
+free communications_betweenUncompromisedParties_r: bitstring.
+
+(* Choice for backward secrecy *)
+free communications_afterKeyRenewal_l: bitstring.
+free communications_afterKeyRenewal_r: bitstring.
+
+
+(* EV - we keep generic naming as the protocol is generic *)
+let p0(skA: scalar, pkB: group) =
+    new esk0: scalar;
+    out(c,sign(dh_oper(g, esk0),skA));
+    in(c, m1: bitstring);
+    let epk1 = checksign(m1, pkB) in
+    if epk1 <> pkB && epk1 <> dh_oper(g,skA) && epk1 <> g then
+    let z0 = dh_oper(epk1, esk0) in
+    let z2 = dh_oper(epk1, skA) in
+    let k = kdf(z0,z2) in
+    in (c,m: bitstring);
+    let msg = dec(m,k) in
+    event messageReceived(msg);
+    0.
+  
+
+(* eMSP *)
+let p1(skB: scalar, pkA: group, message: bitstring) =
+    in(c,m: bitstring);
+    let epk0 = checksign(m,pkA) in
+    if epk0 <> pkA && epk0 <> dh_oper(g,skB) && epk0 <> g then
+    new esk1: scalar;
+    let z0 = dh_oper(epk0, esk1) in
+    let z2 = dh_oper(pkA, esk1) in
+    let k = kdf(z0,z2) in
+    out(c, sign(dh_oper(g, esk1), skB));
+    out(c, enc(message,k));
+    0.
