@@ -8,10 +8,21 @@ We expect that ProVerif is installed according to the [official ProVerif install
 
 > All this work is tested with results reported. Tests have been performed in Ubuntu 26.04.
 
+## Docker image
 
-## Formal verification
+To create a docker image with ProVerif 2.05, please use the following, after cloning the repo:
 
-### Park-and-Charge (PnC) scenarios with Ownership transfer
+```
+docker build -t iso15118-sot-verification:2.05 -f docker/Dockerfile .
+
+docker run --rm -it \
+  -v "$(pwd)":/artefact -w /artefact \
+  iso15118-sot-verification:2.05 bash
+```
+
+# Formal verification
+
+## Park-and-Charge (PnC) scenarios with Ownership transfer
 
 | Scenario | TPM | Rekey | Revoke | Entropy |
 |:---:|:---:|:---:|:---:|:---:|
@@ -61,7 +72,7 @@ TK:  Seller protection = ✘ - Billing legitimated = ✔.
 TR:  Seller protection = ✔ - Billing legitimated = ✔.
 ```
 
-#### Buyer protection notes
+### Buyer protection notes
 Generally, the TPM gives more security as expected.
 In N2, we have signature forgery resistance after rekeying as expected, but N4 shows that they can be stolen again and the attack raises back.
 
@@ -70,11 +81,13 @@ If low-entropy material gets signed, the attck to the TPM used as a signing orac
 > **Note** This attack is *not* preventable; every revision of the ISO-15118 shall consider this attack all the time, and avoid any low-entropy data signed.
 
 
-#### Seller protection notes
+### Seller protection notes
 
 Billing is always legitimated, as the EV is always techincally legitimated to perform operations, regardless of ownership.
 
-### ISO Install certification protocol
+
+
+## ISO Install certification protocol
 
 ```bash
 (
@@ -91,7 +104,9 @@ EV-Certificate-Install-Protocol:  Secrecy = ✔ - Correctness = ✔ - eMSP Authe
 
 The protocol does not meet eMSP Authentication of EV.
 
-### Credentials provisioning
+
+
+## Credentials provisioning
 
 ```bash
 (
@@ -121,7 +136,7 @@ Results are expected to be:
 
 Our solution is provably providing strong forward/backward privacy in every case of key leakage.
 
-#### TPM as a signature oracle
+### TPM as a signature oracle
 
 ```bash
 (
@@ -142,7 +157,10 @@ Results are expected to be:
 If we naively proposed the NIST (e2,s2) protocol as TLS implements it, we could not have some properties.
 The results show that our variant is more appropriate for the ownership transfer scenario under study, where we can protect from Impersonation and other similar attacks.
 
-### Rekeying
+
+
+
+## Rekeying
 
 ```bash
 (
