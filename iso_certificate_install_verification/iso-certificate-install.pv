@@ -163,6 +163,37 @@ process
       (!p1(sskCPS, spkOEM)) (* B allways have a way to acces CPS and make it sign. Also, B knows OEM publick key (due to the pub. key infrastructure) *)
     )
 
+(* Verifies that an attacker with past and future access to the TPM DH-oracle 
+   (but absent during execution) cannot impersonate the EV to obtain certificates. *)
+(* Query not attacker_scalar_p3(future_comunications[]) is true. *)
+(* let tpm_oracle__dh_oper(sk: scalar) = in(c, x: group); out(c, dh_oper(x, sk)).
+
+process 
+    let spkCPS = spk(sskCPS) in
+    out(c, spkCPS); (* public because it is part of the PKI infrastructure *)
+    let spkOEM = spk(sskOEM) in
+    out(c, spkOEM); (* public because it is part of the PKI infrastructure *)
+    let pkEV = dh_oper(g,sk_EV) in
+    (* out(c, pkEV); it is not part of the PKI providers, it will disclosed only diring the contract installation protocol *)
+    new PCID: bitstring;
+    let OEMsig = sign(pkEV,PCID,sskOEM) in
+    
+    (
+        (!p0(sk_EV, OEMsig, spkCPS)) (* A allways have his keys, their certificate, and the publick key of CPS between its installed certificates *)
+        |
+        (!p1(sskCPS, spkOEM)) (* B allways have a way to acces CPS and make it sign. Also, B knows OEM publick key (due to the pub. key infrastructure) *)
+        |
+        phase 1;
+        ( !tpm_oracle__dh_oper(sk_EV) ) |
+        phase 2;
+        (!p0(sk_EV, OEMsig, spkCPS)) (* A allways have his keys, their certificate, and the publick key of CPS between its installed certificates *)
+        |
+        (!p1(sskCPS, spkOEM)) (* B allways have a way to acces CPS and make it sign. Also, B knows OEM publick key (due to the pub. key infrastructure) *)
+        |
+        phase 3;
+        ( !tpm_oracle__dh_oper(sk_EV) )
+    ) *)
+
 (* 
 --------------------------------------------------------------
 Verification summary:
