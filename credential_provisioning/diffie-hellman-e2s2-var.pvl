@@ -33,10 +33,10 @@
  * authentication.
  *
 
-A -> B : g*esk1  (esk1 fresh)
-B -> A : g*esk2  (esk2 fresh)
-A and B compute the key as k = kdf((g*esk1)*skB || (g*skA)*esk2) = kdf((g*skB)*esk1 || (g*esk2)*skA))
-A -> B : { communication }k
+    A -> B : {g*esk1}skA, { g*skA }sk_CERT  (esk1 fresh)
+    B -> A : {g*esk2}skB, { g*skB }sk_CERT  (esk2 fresh)
+    A and B compute the key as k = kdf((g*esk1)*esk2 || (g*skA)*esk2) = kdf((g*esk2)*esk1 || (g*esk2)*skA))
+    B -> A : { communication }k
 
  *
  * NOTE The protocol must guarantee forward secrecy and backwards secrecy.

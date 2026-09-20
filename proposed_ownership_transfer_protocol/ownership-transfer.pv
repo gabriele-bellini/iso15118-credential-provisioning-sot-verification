@@ -372,3 +372,94 @@ process
 
         )
     )
+(* 
+--------------------------------------------------------------
+Verification summary:
+
+Query secret sk_S_3,sk_S_2,sk_S_1,sk_S is true.
+
+Query secret ssk_EV_intended is true.
+
+Query secret sk_B_2,sk_B_1,sk_B is true.
+
+Query secret sk_OEM_1,sk_OEM is true.
+
+Query inj-event(endB(bought[],ID_B_7,ID_S_7,PCID_12,nwPCID_8,N_B_5,N_OEM_B_5)) ==> inj-event(beginB(buy[],ID_B_7,ID_S_7,PCID_12,N_B_5,N_OEM_B_5)) is true.
+
+Query inj-event(endS(sold[],ID_S_7,ID_B_7,PCID_12,N_S_6,N_OEM_S_6)) ==> inj-event(beginS(sell[],ID_S_7,ID_B_7,PCID_12,N_S_6,N_OEM_S_6)) is true.
+
+Query inj-event(endOEM(ID_OEM_5,ID_S_7,ID_B_7,PCID_12,nwPCID_8,nwpk_EV_5,N_S_6,N_B_5,N_EV_9,N_OEM_S_6,N_OEM_B_5)) ==> inj-event(beginOEM(ID_OEM_5,ID_S_7,ID_B_7,PCID_12,N_S_6,N_B_5,N_EV_9,N_OEM_S_6,N_OEM_B_5)) is true.
+
+Query inj-event(endEV(PCID_12,ID_OEM_5,pk_EV_5,nwPCID_8,nwpk_EV_5,N_EV_9)) ==> inj-event(beginEV(PCID_12,ID_OEM_5,pk_EV_5,nwpk_EV_5,N_EV_9)) is true.
+
+Query inj-event(endB(bought[],ID_B_7,ID_S_7,PCID_12,nwPCID_8,N_B_5,N_OEM_B_5)) ==> inj-event(endOEM(ID_OEM_5,ID_S_7,ID_B_7,PCID_12,nwPCID_8,nwpk_EV_5,N_S_6,N_B_5,N_EV_9,N_OEM_S_6,N_OEM_B_5)) is true.
+
+Query inj-event(endS(sold[],ID_S_7,ID_B_7,PCID_12,N_S_6,N_OEM_S_6)) ==> inj-event(endOEM(ID_OEM_5,ID_S_7,ID_B_7,PCID_12,nwPCID_8,nwpk_EV_5,N_S_6,N_B_5,N_EV_9,N_OEM_S_6,N_OEM_B_5)) is true.
+
+Query inj-event(endOEM(ID_OEM_5,ID_S_7,ID_B_7,PCID_12,nwPCID_8,nwpk_EV_5,N_S_6,N_B_5,N_EV_9,N_OEM_S_6,N_OEM_B_5)) ==> inj-event(endEV(PCID_12,ID_OEM_5,pk_EV_5,nwPCID_8,nwpk_EV_5,N_EV_9)) is true.
+
+Query inj-event(endB(bought[],ID_B_7,ID_S_7,PCID_12,nwPCID_8,N_B_5,N_OEM_B_5)) ==> inj-event(endEV(PCID_12,ID_OEM_5,pk_EV_5,nwPCID_8,nwpk_EV_5,N_EV_9)) is true.
+
+Query inj-event(endS(sold[],ID_S_7,ID_B_7,PCID_12,N_S_6,N_OEM_S_6)) ==> inj-event(endEV(PCID_12,ID_OEM_5,pk_EV_5,nwPCID_8,nwpk_EV_5,N_EV_9)) is true.
+
+Query inj-event(endS(sold[],ID_S_7,ID_B_7,PCID_12,N_S_6,N_OEM_S_6)) ==> inj-event(beginOEM(ID_OEM_5,ID_S_7,ID_B_7,PCID_12,N_S_6,N_B_5,N_EV_9,N_OEM_S_6,N_OEM_B_5)) is true.
+
+Query inj-event(endB(bought[],ID_B_7,ID_S_7,PCID_12,nwPCID_8,N_B_5,N_OEM_B_5)) ==> inj-event(beginOEM(ID_OEM_5,ID_S_7,ID_B_7,PCID_12,N_S_6,N_B_5,N_EV_9,N_OEM_S_6,N_OEM_B_5)) is true.
+
+Query inj-event(endOEM(ID_OEM_5,ID_S_7,ID_B_7,PCID_12,nwPCID_8,nwpk_EV_5,N_S_6,N_B_5,N_EV_9,N_OEM_S_6,N_OEM_B_5)) ==> inj-event(beginB(buy[],ID_B_7,ID_S_7,PCID_12,N_B_5,N_OEM_B_5)) is true.
+
+Query inj-event(endOEM(ID_OEM_5,ID_S_7,ID_B_7,PCID_12,nwPCID_8,nwpk_EV_5,N_S_6,N_B_5,N_EV_9,N_OEM_S_6,N_OEM_B_5)) ==> inj-event(beginS(sell[],ID_S_7,ID_B_7,PCID_12,N_S_6,N_OEM_S_6)) is true.
+
+Query inj-event(endEV(PCID_12,ID_OEM_5,pk_EV_5,nwPCID_8,nwpk_EV_5,N_EV_9)) ==> inj-event(beginOEM(ID_OEM_5,ID_S_7,ID_B_7,PCID_12,N_S_6,N_B_5,N_EV_9,N_OEM_S_6,N_OEM_B_5)) is true.
+
+Query inj-event(endOEM(ID_OEM_5,ID_S_7,ID_B_7,PCID_12,nwPCID_8,nwpk_EV_5,N_S_6,N_B_5,N_EV_9,N_OEM_S_6,N_OEM_B_5)) ==> inj-event(beginEV(PCID_12,ID_OEM_5,pk_EV_5,nwpk_EV_5,N_EV_9)) is true.
+
+Query inj-event(endOEM(ID_OEM_5,ID_S_7,ID_B_7,PCID_12,nwPCID_8,nwpk_EV_5,N_S_6,N_B_5,N_EV_9,N_OEM_S_6,N_OEM_B_5)) ==> (inj-event(endEV(PCID_12,ID_OEM_5,pk_EV_5,nwPCID_8,nwpk_EV_5,N_EV_9)) ==> inj-event(beginB(buy[],ID_B_7,ID_S_7,PCID_12,N_B_5,N_OEM_B_5))) is true.
+
+Query inj-event(endOEM(ID_OEM_5,ID_S_7,ID_B_7,PCID_12,nwPCID_8,nwpk_EV_5,N_S_6,N_B_5,N_EV_9,N_OEM_S_6,N_OEM_B_5)) ==> (inj-event(endEV(PCID_12,ID_OEM_5,pk_EV_5,nwPCID_8,nwpk_EV_5,N_EV_9)) ==> inj-event(beginS(sell[],ID_S_7,ID_B_7,PCID_12,N_S_6,N_OEM_S_6))) is true.
+
+Query inj-event(endS(sold[],ID_S_7,ID_B_7,PCID_12,N_S_6,N_OEM_S_6)) ==> (inj-event(beginOEM(ID_OEM_5,ID_S_7,ID_B_7,PCID_12,N_S_6,N_B_5,N_EV_9,N_OEM_S_6,N_OEM_B_5)) ==> inj-event(beginB(buy[],ID_B_7,ID_S_7,PCID_12,N_B_5,N_OEM_B_5))) is true.
+
+Query inj-event(endB(bought[],ID_B_7,ID_S_7,PCID_12,nwPCID_8,N_B_5,N_OEM_B_5)) ==> (inj-event(beginOEM(ID_OEM_5,ID_S_7,ID_B_7,PCID_12,N_S_6,N_B_5,N_EV_9,N_OEM_S_6,N_OEM_B_5)) ==> inj-event(beginS(sell[],ID_S_7,ID_B_7,PCID_12,N_S_6,N_OEM_S_6))) is true.
+
+Query inj-event(endS(sold[],ID_S_7,ID_B_7,PCID_12,N_S_6,N_OEM_S_6)) ==> (inj-event(beginOEM(ID_OEM_5,ID_S_7,ID_B_7,PCID_12,N_S_6,N_B_5,N_EV_9,N_OEM_S_6,N_OEM_B_5)) ==> inj-event(beginEV(PCID_12,ID_OEM_5,pk_EV_5,nwpk_EV_5,N_EV_9))) is true.
+
+Query inj-event(endB(bought[],ID_B_7,ID_S_7,PCID_12,nwPCID_8,N_B_5,N_OEM_B_5)) ==> (inj-event(beginOEM(ID_OEM_5,ID_S_7,ID_B_7,PCID_12,N_S_6,N_B_5,N_EV_9,N_OEM_S_6,N_OEM_B_5)) ==> inj-event(beginEV(PCID_12,ID_OEM_5,pk_EV_5,nwpk_EV_5,N_EV_9))) is true.
+
+Query not event(endS(sold[],S[],B[],scamPCID[],N_S_6,N_OEM_S_6)) is true.
+
+Query not event(endB(bought[],B[],S[],scamPCID[],nwPCID_8,N_B_5,N_OEM_B_5)) is true.
+
+Query not event(endS(sold[],S[],B[],otherPCID[],N_S_6,N_OEM_S_6)) is true.
+
+Query not event(endB(bought[],B[],S[],otherPCID[],nwPCID_8,N_B_5,N_OEM_B_5)) is true.
+
+Query not event(endS(sold[],otherS[],B[],otherPCID[],N_S_6,N_OEM_S_6)) is true.
+
+Query not event(endB(bought[],otherB[],S[],intendedPCID[],nwPCID_8,N_B_5,N_OEM_B_5)) is true.
+
+Query not event(beginOEM(otherOEM[],ID_S_7,ID_B_7,PCID_12,N_S_6,N_B_5,N_EV_9,N_OEM_S_6,N_OEM_B_5)) is true.
+
+Query not event(endOEM(otherOEM[],ID_S_7,ID_B_7,PCID_12,nwPCID_8,nwpk_EV_5,N_S_6,N_B_5,N_EV_9,N_OEM_S_6,N_OEM_B_5)) is true.
+
+Query not event(endB(bought[],B[],S[],intendedPCID[],nwPCID_8,N_B_5,N_OEM_B_5)) is false.
+
+Query not event(endS(sold[],S[],B[],intendedPCID[],N_S_6,N_OEM_S_6)) is false.
+
+Query not event(endOEM(OEM[],S[],B[],intendedPCID[],nwPCID_8,nwpk_EV_5,N_S_6,N_B_5,N_EV_9,N_OEM_S_6,N_OEM_B_5)) is false.
+
+Query not event(endEV(intendedPCID[],OEM[],pk_EV_5,nwPCID_8,nwpk_EV_5,N_EV_9)) is false.
+
+Query inj-event(endB(bought[],B[],S[],intendedPCID[],nwPCID_8,N_B_5,N_OEM_B_5)) ==> inj-event(endEV(intendedPCID[],OEM[],pk_EV_5,nwPCID_8,nwpk_EV_5,N_EV_9)) is true.
+
+Query not (event(endB(bought[],ID_B_7,ID_S_7,PCID_12,nwPCID_8,N_B1,N_OEM_B1)) && event(endB(bought[],ID_B_7,ID_S_7,PCID2,nwPCID2,N_B2,N_OEM_B2)) && N_B1 ≠ N_B2) is false.
+
+--------------------------------------------------------------
+
+	Command being timed: "../proverif2.05/proverif proposed_ownership_transfer_protocol/ownership-transfer.pv"
+	User time (seconds): 1.23
+	System time (seconds): 0.08
+	Percent of CPU this job got: 98%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:01.35
+	Maximum resident set size (kbytes): 27908
+*)

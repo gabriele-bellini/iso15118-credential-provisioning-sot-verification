@@ -162,3 +162,25 @@ process
       |
       (!p1(sskCPS, spkOEM)) (* B allways have a way to acces CPS and make it sign. Also, B knows OEM publick key (due to the pub. key infrastructure) *)
     )
+
+(* 
+--------------------------------------------------------------
+Verification summary:
+
+Query not attacker_scalar(future_comunications[]) is true.
+
+Query inj-event(endA(h1,h2,skEV_1,dh_oper(g,esk),skc_2)) ==> inj-event(endB(h1,h2,dh_oper(g,skEV_1),esk,skc_2)) is true.
+
+Query inj-event(endB(h1,h2,pkEV_3,esk,skc_2)) ==> inj-event(beginA(h1,h2,pkEV_3)) is false.
+
+Query inj-event(endA(h1,h2,skEV_1,epk_1,skc_2)) ==> inj-event(beginB(h1,h2,dh_oper(g,skEV_1),epk_1)) is true.
+
+--------------------------------------------------------------
+
+	Command being timed: "../proverif2.05/proverif iso_certificate_install_verification/iso-certificate-install.pv"
+	User time (seconds): 0.02
+	System time (seconds): 0.00
+	Percent of CPU this job got: 93%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.03
+	Maximum resident set size (kbytes): 10880
+*)

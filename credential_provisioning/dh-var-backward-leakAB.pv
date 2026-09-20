@@ -53,14 +53,15 @@ process
 --------------------------------------------------------------
 Verification summary:
 
-Observational equivalence cannot be proved.
+Observational equivalence is true.
 
 --------------------------------------------------------------
 
-	User time (seconds): 4.18
-	System time (seconds): 0.09
+	Command being timed: "../proverif2.05/proverif -lib credential_provisioning/diffie-hellman-e2s2-var.pvl credential_provisioning/dh-var-backward-leakAB.pv"
+	User time (seconds): 31.79
+	System time (seconds): 0.30
 	Percent of CPU this job got: 99%
-	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:04.28
-	Maximum resident set size (kbytes): 92312
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:32.10
+	Maximum resident set size (kbytes): 272364
 
 *)
