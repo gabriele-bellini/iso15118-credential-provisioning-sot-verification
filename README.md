@@ -149,9 +149,9 @@ Our solution is provably providing strong forward/backward privacy in every case
 Results are expected to be:
 
 ```
-(e2,s2)-tpm-oracle:  Impersonation Resistance = ✘ - Forward privacy = ✔ - Unilateral compromise security = ✘ - Partial post-compromise security = ✔ - Mutual compromise security = ✘ - Backward privacy = ✔.
+(e2,s2)-tpm-oracle:  Forward privacy = ✔ - EV Impersonation Resistance = ✘ - Backward privacy = ✔.
 
-(e2,s2)-variant-tpm-oracle:  Impersonation Resistance = ✔ - Forward privacy = ✔ - Unilateral compromise security = ✔ - Partial post-compromise security = ✔ - Mutual compromise security = ✔ - Backward privacy = ✔.
+(e2,s2)-variant-tpm-oracle:  Forward privacy = ✔ - EV Impersonation Resistance = ✔ - Backward privacy = ✔.
 ```
 
 If we naively proposed the NIST (e2,s2) protocol as TLS implements it, we could not have some properties.
