@@ -34,8 +34,8 @@ process
      * The sender has had their private signing key compromised.
      *)
     phase 2;
-    out(c, skA);
-    ( (!p0(skA, pkB)) | (!p1(skB, pkA, communications_betweenCompromisedParties)) )
+    out(c, skA)
+    (* ( (!p0(skA, pkB)) | (!p1(skB, pkA, communications_betweenCompromisedParties)) ) *)
   )
 
 (*

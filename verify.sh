@@ -39,11 +39,11 @@ prop_name() {
     *VehicleAuthenticated*)  q="Signature forgery resistance" ;;
     *LegitAuthorize*)        q="Billing legitimated" ;;
     *Observational*)         q="Forward/Backward privacy" ;;
-    *attacker_message*)      q="Impersonation Resistance" ;;
+    # *attacker_message*)      q="eMSP Impersonation Resistance" ;; # eSMP compromise is outside the threat model
     *betweenUncompromised*)  q="Forward privacy" ;;
-    *betweenCompromised*)    q="Mutual compromise security" ;;
-    *fromCompromisedSk*)     q="Unilateral compromise security" ;;
-    *toCompromisedSk*)       q="Partial post-compromise security" ;;
+    # *betweenCompromised*)    q="Mutual compromise security" ;; # eSMP compromise is outside the threat model
+    # *fromCompromisedSk*)     q="Unilateral compromise security" ;; # eSMP compromise is outside the threat model
+    *toCompromisedSk*)       q="EV Impersonation Resistance" ;;
     *afterFullKeyRenewal*)   q="Backward privacy" ;;
     *attacker_scalar*)       q="Secrecy" ;;
     *dh_oper\(g,esk*)        q="Correctness" ;;

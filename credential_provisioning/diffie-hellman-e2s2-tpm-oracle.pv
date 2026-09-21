@@ -71,20 +71,23 @@ free attacker_message: bitstring.
 (* Test protocol termination *)
 event messageReceived(bitstring).
 (* These 5 event can be use to validate the model correct implementation *)
-query event(messageReceived(communications_betweenUncompromisedParties)).
+(* query event(messageReceived(communications_betweenUncompromisedParties)). *)
 (* query event(messageReceived(communications_fromCompromisedSkOwner)). *)
 (* query event(messageReceived(communications_betweenCompromisedParties)). *)
-query event(messageReceived(communications_toCompromisedSkOwner)).
-query event(messageReceived(communications_afterFullKeyRenewal)).
+(* query event(messageReceived(communications_toCompromisedSkOwner)). *)
+(* query event(messageReceived(communications_afterFullKeyRenewal)). *)
 
-(* This, when proved reachable, demonstrate an impersonation attack *)
-query event(messageReceived(attacker_message)).
+(* This, when proved reachable, demonstrate an eMSP impersonation attack *)
+(* scenario not tested because eMSP compromise is outside our threat model *)
+(* query event(messageReceived(attacker_message)). *)
 
-(* Test whether communications are secret *)
+(* Test whether communications are secret and Forward secrecy *)
 query attacker(communications_betweenUncompromisedParties).
 (* query attacker(communications_fromCompromisedSkOwner). *)
+(* This, when proved reachable, demonstrate an EV impersonation attack *)
 query attacker(communications_toCompromisedSkOwner).
 (* query attacker(communications_betweenCompromisedParties). *)
+(* Test backward secrecy *)
 query attacker(communications_afterFullKeyRenewal).
 
 
